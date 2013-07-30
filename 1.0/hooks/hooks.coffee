@@ -7,15 +7,16 @@ coffeescript = require 'coffee-script'
 less = require 'less'
 compileFileType = require './compile-file-type'
 utils = require './utils'
+config = require './config'
 
 
 exports.build_pre_compile = (logger, config, cli, build, finished) ->
-  logger.info "Compiling source files"
+  projectDir = build.projectDir || process.cwd()
+  logger.info "Compiling source files at: " + projectDir
+  logger.debug build
 
   # Setup
-  resourcesOutputDir = build.projectDir + '/Resources'
-  staticResourcesInputDir = build.projectDir + '/Resources-static'
-  compileResourcesInputDir = build.projectDir + '/Resources-compile'
+  resourcesOutputDir = projectDir + '/Resources'
 
   async.parallel [
     (cb) ->
@@ -25,9 +26,15 @@ exports.build_pre_compile = (logger, config, cli, build, finished) ->
       catch err
         return cb(err) if not err or err.code != 'EEXIST'
       cb null
-    (cb) -> copyStaticFiles(staticResourcesInputDir, resourcesOutputDir, cb)
-    (cb) -> compileFiles(logger, compileResourcesInputDir, resourcesOutputDir, cb)
-  ]
+  ].concat(
+    for entry in config.compile_dirs || []
+      [inDir, outDir] = (projectDir+'/'+name for name in _.isArray(entry) ? entry : [entry, entry])
+      (cb) -> compileFiles(logger, inDir, outDir, cb)
+  ).concat(
+    for entry in config.static_dirs || []
+      [inDir, outDir] = (projectDir+'/'+name for name in _.isArray(entry) ? entry : [entry, entry])
+      (cb) -> copyStaticFiles(logger, inDir, outDir, cb)
+  )
   , (err) ->
     if err
       logger.error "Error compiling files: #{err}"
@@ -39,8 +46,11 @@ exports.build_pre_compile = (logger, config, cli, build, finished) ->
 exports.clean_post = (logger, config, cli, build, finished) ->
   console.log cli.argv['project-dir']
   resourcesOutputDir = cli.argv['project-dir'] + '/Resources'
-  logger.info "Cleaning resources output directory: #{resourcesOutputDir}"
-  cleanFiles resourcesOutputDir
+  for entry in (config.compile_dirs || []).concat(config.static_dirs || [])
+    return if !_.isArray entry
+    outDir = cli.argv['project-dir'] + '/' + entry[1]
+    logger.info "Cleaning resources output directory: #{outDir}"
+    cleanFiles outDir
 
 copyStaticFiles = (inputDir, outputDir, cb) ->
   spawn 'cp', [
