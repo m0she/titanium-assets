@@ -68,7 +68,8 @@ copyStaticFiles = (inputDir, outputDir, cb) ->
 
 compileFiles = (logger, inputDir, outputDir, cb) ->
   compileFunctions = _.map [
-    { inSuffix: 'coffee', outSuffix: 'js', fnCompile: utils.funcAsAsync(coffeescript.compile) }
+    { inSuffix: 'coffee', outSuffix: 'js', fnCompile: utils.funcAsAsync((code) ->
+      coffeescript.compile(code, bare: true)) }
     { inSuffix: 'less', outSuffix: 'css', fnCompile: less.render }
   ], (funcDef) ->
     (cbCompile) ->
